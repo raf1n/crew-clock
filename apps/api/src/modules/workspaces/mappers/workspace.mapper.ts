@@ -7,6 +7,7 @@ export function toWorkspace(workspace: WorkspaceEntity): Workspace {
   return {
     id: workspace.id,
     name: workspace.name,
+    activityRetentionDays: workspace.activityRetentionDays,
     createdAt: workspace.createdAt.toISOString(),
     updatedAt: workspace.updatedAt.toISOString(),
   };

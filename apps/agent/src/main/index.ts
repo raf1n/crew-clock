@@ -20,6 +20,8 @@ import {
   RESUME_IDLE_SECONDS,
 } from './lib/constants';
 import { log } from './lib/logger';
+import { ActivitySampler } from './services/activity-sampler';
+import { ActivitySyncService } from './services/activity-sync-service';
 import { ApiClient } from './services/api-client';
 import { DeviceSetupService } from './services/device-setup';
 import { buildState } from './services/state';
@@ -35,6 +37,8 @@ let db: AgentDatabase;
 let api: ApiClient;
 let timer: TimerService;
 let sync: SyncService;
+let activitySync: ActivitySyncService;
+let activitySampler: ActivitySampler;
 let setup: DeviceSetupService;
 let idleInterval: NodeJS.Timeout | null = null;
 
@@ -156,13 +160,24 @@ async function start(): Promise<void> {
   timer = new TimerService(db);
   setup = new DeviceSetupService(db, api);
   sync = new SyncService(db, api, () => revealToken(db.getSetting('deviceToken')), notify);
+  activitySync = new ActivitySyncService(
+    db,
+    api,
+    () => revealToken(db.getSetting('deviceToken')),
+    notify,
+  );
+  activitySampler = new ActivitySampler(
+    db,
+    () => timer.getTimer(),
+    () => void activitySync.syncNow(),
+  );
 
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
     callback(false);
   });
   session.defaultSession.setPermissionCheckHandler(() => false);
 
-  registerIpc({ db, api, timer, sync, setup, notify });
+  registerIpc({ db, api, timer, sync, activitySync, setup, notify });
   createWindow();
 
   const trayReady = createTray({
@@ -186,6 +201,8 @@ async function start(): Promise<void> {
   }
 
   sync.start();
+  activitySync.start();
+  activitySampler.start();
   try {
     const recovered = timer.recoverStaleTimer();
     if (recovered) {
@@ -239,6 +256,8 @@ if (!hasSingleInstanceLock) {
       log.error('Failed to persist timer on shutdown', error);
     }
     sync?.stop();
+    activitySync?.stop();
+    void activitySampler?.stop();
     if (idleInterval) {
       clearInterval(idleInterval);
       idleInterval = null;

@@ -79,4 +79,27 @@ describe('AgentDatabase queue', () => {
     expect(db.getCachedProjects('workspace-2')).toBeNull();
     db.close();
   });
+
+  it('queues activity samples idempotently', () => {
+    const db = new AgentDatabase(':memory:');
+    const sample = {
+      clientSampleId: 'sample-1',
+      intervalStart: '2026-01-01T09:00:00.000Z',
+      intervalEnd: '2026-01-01T09:01:00.000Z',
+      source: 'desktop' as const,
+      activeSeconds: 55,
+      idleSeconds: 5,
+      keyboardEvents: 10,
+      mouseEvents: 4,
+    };
+
+    expect(db.enqueueActivitySample(sample)).toBe(true);
+    expect(db.enqueueActivitySample(sample)).toBe(false);
+    expect(db.pendingActivityCount()).toBe(1);
+
+    const [pending] = db.pendingActivitySamples();
+    db.markActivitySynced(pending!.id);
+    expect(db.pendingActivityCount()).toBe(0);
+    db.close();
+  });
 });

@@ -11,6 +11,7 @@ import {
   tasksIpcSchema,
 } from '../../shared/validation';
 import type { ApiClient } from '../services/api-client';
+import { ActivitySyncService } from '../services/activity-sync-service';
 import type { DeviceSetupService } from '../services/device-setup';
 import { log } from '../lib/logger';
 import { buildState, readDevice } from '../services/state';
@@ -24,12 +25,13 @@ interface IpcDependencies {
   api: ApiClient;
   timer: TimerService;
   sync: SyncService;
+  activitySync: ActivitySyncService;
   setup: DeviceSetupService;
   notify: () => void;
 }
 
 export function registerIpc(deps: IpcDependencies): void {
-  const { db, api, timer, sync, setup, notify } = deps;
+  const { db, api, timer, sync, activitySync, setup, notify } = deps;
   const state = () => buildState(db, api, timer);
 
   ipcMain.handle('agent:state', () => state());
@@ -115,14 +117,15 @@ export function registerIpc(deps: IpcDependencies): void {
   });
 
   ipcMain.handle('agent:sync-now', async () => {
-    const result = await sync.syncNow();
+    const [result] = await Promise.all([sync.syncNow(), activitySync.syncNow()]);
     notify();
     return result;
   });
 
   ipcMain.handle('agent:discard-failed', () => {
     db.clearFailed();
-    if (db.pendingCount() === 0) {
+    db.clearFailedActivity();
+    if (db.pendingCount() === 0 && db.pendingActivityCount() === 0) {
       db.deleteSetting('lastError');
     }
     notify();
@@ -131,9 +134,17 @@ export function registerIpc(deps: IpcDependencies): void {
 
   ipcMain.handle('agent:sign-out', () => {
     db.clearQueue();
+    db.clearActivityQueue();
     timer.discard();
     timer.discardPaused();
-    for (const key of ['deviceToken', 'device', 'workspaceName', 'lastSyncedAt', 'lastError']) {
+    for (const key of [
+      'deviceToken',
+      'device',
+      'workspaceName',
+      'lastSyncedAt',
+      'lastError',
+      'activityCaptureError',
+    ]) {
       db.deleteSetting(key);
     }
     setup.clearPending();

@@ -1,4 +1,6 @@
 import type {
+  ActivityIngestResult,
+  ActivitySampleInput,
   AuthResponse,
   CreateDeviceInput,
   CreateDeviceResult,
@@ -38,6 +40,16 @@ function parseRetryAfter(header: string | null): number | null {
   }
   const date = Date.parse(header);
   return Number.isNaN(date) ? null : Math.max(0, Math.ceil((date - Date.now()) / 1000));
+}
+
+function networkErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    if (error.cause instanceof Error) {
+      return error.cause.message;
+    }
+    return error.message;
+  }
+  return 'network error';
 }
 
 export class ApiClient {
@@ -96,16 +108,32 @@ export class ApiClient {
     });
   }
 
-  private async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      method: options.method ?? 'GET',
-      headers: {
-        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
-      },
-      body: options.body ? JSON.stringify(options.body) : undefined,
-      signal: AbortSignal.timeout(15_000),
+  ingestActivity(
+    deviceToken: string,
+    samples: ActivitySampleInput[],
+  ): Promise<ActivityIngestResult> {
+    return this.request<ActivityIngestResult>('/agent/activity-samples', {
+      method: 'POST',
+      token: deviceToken,
+      body: { samples },
     });
+  }
+
+  private async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        method: options.method ?? 'GET',
+        headers: {
+          ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+          ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined,
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch (error) {
+      throw new ApiError(`Cannot reach API at ${this.baseUrl}: ${networkErrorMessage(error)}`, 0);
+    }
 
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as {

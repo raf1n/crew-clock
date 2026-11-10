@@ -36,7 +36,8 @@
     "onlyBuiltDependencies": [
       "argon2",
       "better-sqlite3",
-      "electron"
+      "electron",
+      "uiohook-napi"
     ]
   }
 }

@@ -33,6 +33,9 @@ export function buildState(db: AgentDatabase, api: ApiClient, timer: TimerServic
     pausedTimer: timer.getPausedTimer(),
     pendingEntries: db.pendingCount(),
     failedEntries: db.failedCount(),
+    pendingActivitySamples: db.pendingActivityCount(),
+    failedActivitySamples: db.failedActivityCount(),
+    activityCaptureError: db.getSetting('activityCaptureError'),
     lastSyncedAt: db.getSetting('lastSyncedAt'),
     lastError: db.getSetting('lastError'),
   };

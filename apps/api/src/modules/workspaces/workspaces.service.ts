@@ -17,6 +17,7 @@ import {
   type InviteMemberInput,
   type Member,
   type MemberWithUser,
+  type UpdateWorkspaceSettingsInput,
   type WorkspaceMembership,
 } from '@crewclock/shared';
 import { DataSource, IsNull, MoreThan, Repository, type EntityManager } from 'typeorm';
@@ -98,6 +99,23 @@ export class WorkspacesService {
     }
 
     return { ...toWorkspace(membership.workspace), role: membership.role };
+  }
+
+  async updateSettings(
+    actorId: string,
+    workspaceId: string,
+    input: UpdateWorkspaceSettingsInput,
+  ): Promise<WorkspaceMembership> {
+    const membership = await this.getMembership(actorId, workspaceId);
+    if (!roleAtLeast(membership.role, 'manager')) {
+      throw new ForbiddenException('Only owners and managers can update workspace settings');
+    }
+
+    await this.workspaces.update(
+      { id: workspaceId },
+      { activityRetentionDays: input.activityRetentionDays, updatedById: actorId },
+    );
+    return this.getForUser(actorId, workspaceId);
   }
 
   findMembership(userId: string, workspaceId: string): Promise<MemberEntity | null> {

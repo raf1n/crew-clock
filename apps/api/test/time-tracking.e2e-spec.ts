@@ -628,6 +628,81 @@ describe('time tracking (e2e)', () => {
       .expect(200);
     expect(agentTasks.body.map((task: { id: string }) => task.id)).toContain(taskId);
 
+    const sampleId = randomUUID();
+    const activitySample = {
+      clientSampleId: sampleId,
+      intervalStart: '2026-03-02T09:00:00.000Z',
+      intervalEnd: '2026-03-02T09:05:00.000Z',
+      source: 'desktop',
+      activeSeconds: 240,
+      idleSeconds: 60,
+      keyboardEvents: 42,
+      mouseEvents: 12,
+      appName: 'Visual Studio Code',
+      appId: 'com.microsoft.VSCode',
+      windowTitle: 'agent.ts',
+    };
+
+    const activityBatch = await request(server)
+      .post('/v1/agent/activity-samples')
+      .set('Authorization', auth(deviceToken))
+      .send({ samples: [activitySample] })
+      .expect(201);
+    expect(activityBatch.body).toEqual({ accepted: 1, duplicates: 0 });
+
+    const activityReplay = await request(server)
+      .post('/v1/agent/activity-samples')
+      .set('Authorization', auth(deviceToken))
+      .send({ samples: [activitySample] })
+      .expect(201);
+    expect(activityReplay.body).toEqual({ accepted: 0, duplicates: 1 });
+
+    await request(server)
+      .post('/v1/agent/activity-samples')
+      .set('Authorization', auth(deviceToken))
+      .send({
+        samples: [{ ...activitySample, clientSampleId: randomUUID(), activeSeconds: 9_999 }],
+      })
+      .expect(400);
+
+    const activityReport = await request(server)
+      .get(
+        `/v1/workspaces/${workspaceId}/activity?from=2026-03-02T00:00:00.000Z&to=2026-03-03T00:00:00.000Z`,
+      )
+      .set('Authorization', auth(memberToken))
+      .expect(200);
+    expect(activityReport.body.totalActiveSeconds).toBe(240);
+    expect(activityReport.body.totalIdleSeconds).toBe(60);
+    expect(activityReport.body.sampleCount).toBe(1);
+    expect(activityReport.body.groups[0]).toMatchObject({
+      appName: 'Visual Studio Code',
+      appId: 'com.microsoft.VSCode',
+      activeSeconds: 240,
+      idleSeconds: 60,
+      keyboardEvents: 42,
+      mouseEvents: 12,
+    });
+
+    await request(server)
+      .get(
+        `/v1/workspaces/${workspaceId}/activity?from=2026-03-02T00:00:00.000Z&to=2026-03-03T00:00:00.000Z`,
+      )
+      .set('Authorization', auth(outsiderToken))
+      .expect(404);
+
+    const settings = await request(server)
+      .patch(`/v1/workspaces/${workspaceId}`)
+      .set('Authorization', auth(ownerToken))
+      .send({ activityRetentionDays: 30 })
+      .expect(200);
+    expect(settings.body.activityRetentionDays).toBe(30);
+
+    await request(server)
+      .patch(`/v1/workspaces/${workspaceId}`)
+      .set('Authorization', auth(memberToken))
+      .send({ activityRetentionDays: 7 })
+      .expect(403);
+
     await request(server)
       .post('/v1/agent/heartbeat')
       .set('Authorization', auth('cc_dev_invalid'))

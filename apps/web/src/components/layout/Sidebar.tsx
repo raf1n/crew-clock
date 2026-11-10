@@ -1,6 +1,7 @@
 import { roleAtLeast } from '@crewclock/shared';
 import type { LucideIcon } from 'lucide-react';
 import {
+  Activity,
   BarChart3,
   CalendarClock,
   FolderKanban,
@@ -33,6 +34,7 @@ export const NAV_ITEMS: NavItemConfig[] = [
   { to: '/projects', label: 'Projects', icon: FolderKanban },
   { to: '/timesheets', label: 'Timesheets', icon: CalendarClock },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
+  { to: '/activity', label: 'Activity', icon: Activity },
   { to: '/devices', label: 'Devices', icon: MonitorSmartphone },
   { to: '/members', label: 'Members', icon: Users, adminOnly: true },
 ];

@@ -46,6 +46,9 @@ export interface AgentState {
   pausedTimer: PausedTimer | null;
   pendingEntries: number;
   failedEntries: number;
+  pendingActivitySamples: number;
+  failedActivitySamples: number;
+  activityCaptureError: string | null;
   lastSyncedAt: string | null;
   lastError: string | null;
 }

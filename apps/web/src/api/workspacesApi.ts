@@ -6,6 +6,7 @@ import type {
   InviteMemberInput,
   Member,
   MemberWithUser,
+  UpdateWorkspaceSettingsInput,
   WorkspaceMembership,
 } from '@crewclock/shared';
 
@@ -20,6 +21,17 @@ export const workspacesApi = baseApi.injectEndpoints({
     getMembers: builder.query<MemberWithUser[], string>({
       query: (workspaceId) => `/workspaces/${workspaceId}/members`,
       providesTags: ['Workspace'],
+    }),
+    updateWorkspaceSettings: builder.mutation<
+      WorkspaceMembership,
+      { workspaceId: string; body: UpdateWorkspaceSettingsInput }
+    >({
+      query: ({ workspaceId, body }) => ({
+        url: `/workspaces/${workspaceId}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: ['Workspace'],
     }),
     addMember: builder.mutation<Member, { workspaceId: string; body: AddMemberInput }>({
       query: ({ workspaceId, body }) => ({
@@ -67,6 +79,7 @@ export const workspacesApi = baseApi.injectEndpoints({
 export const {
   useGetWorkspacesQuery,
   useGetMembersQuery,
+  useUpdateWorkspaceSettingsMutation,
   useAddMemberMutation,
   useCreateInvitationMutation,
   useListInvitationsQuery,

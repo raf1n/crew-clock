@@ -2,7 +2,7 @@ import { chmodSync } from 'node:fs';
 
 import Database from 'better-sqlite3';
 
-import type { Project } from '@crewclock/shared';
+import type { ActivitySampleInput, Project } from '@crewclock/shared';
 
 import type { PausedTimer, TimerState } from '../../shared/types';
 import { MAX_QUEUE_SIZE } from '../lib/constants';
@@ -73,6 +73,15 @@ export class AgentDatabase {
         projects TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS activity_queue (
+        id TEXT PRIMARY KEY,
+        payload TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        next_attempt_at INTEGER NOT NULL,
+        last_error TEXT,
+        dead_lettered INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+      );
     `);
 
     const columns = this.db.pragma('table_info(queue)') as ColumnInfo[];
@@ -83,8 +92,10 @@ export class AgentDatabase {
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_queue_pending
       ON queue (dead_lettered, next_attempt_at, created_at);
+      CREATE INDEX IF NOT EXISTS idx_activity_queue_pending
+      ON activity_queue (dead_lettered, next_attempt_at, created_at);
     `);
-    this.db.pragma('user_version = 1');
+    this.db.pragma('user_version = 2');
   }
 
   close(): void {
@@ -218,6 +229,76 @@ export class AgentDatabase {
 
   clearQueue(): void {
     this.db.prepare('DELETE FROM queue').run();
+  }
+
+  enqueueActivitySample(payload: ActivitySampleInput): boolean {
+    if (this.pendingActivityCount() + this.failedActivityCount() >= MAX_QUEUE_SIZE) {
+      throw new Error('Activity queue is full — reconnect to sync before tracking more');
+    }
+    const result = this.db
+      .prepare(
+        'INSERT OR IGNORE INTO activity_queue (id, payload, next_attempt_at, created_at) VALUES (?, ?, ?, ?)',
+      )
+      .run(payload.clientSampleId, JSON.stringify(payload), Date.now(), Date.now());
+    return result.changes > 0;
+  }
+
+  pendingActivitySamples(
+    limit = 50,
+  ): Array<ActivitySampleInput & { id: string; attempts: number }> {
+    const rows = this.db
+      .prepare(
+        'SELECT id, payload, attempts FROM activity_queue WHERE dead_lettered = 0 AND next_attempt_at <= ? ORDER BY created_at ASC LIMIT ?',
+      )
+      .all(Date.now(), limit) as Array<{ id: string; payload: string; attempts: number }>;
+
+    return rows.map((row) => ({
+      ...(JSON.parse(row.payload) as ActivitySampleInput),
+      id: row.id,
+      attempts: row.attempts,
+    }));
+  }
+
+  pendingActivityCount(): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) AS count FROM activity_queue WHERE dead_lettered = 0')
+      .get() as { count: number };
+    return row.count;
+  }
+
+  failedActivityCount(): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) AS count FROM activity_queue WHERE dead_lettered = 1')
+      .get() as { count: number };
+    return row.count;
+  }
+
+  markActivitySynced(id: string): void {
+    this.db.prepare('DELETE FROM activity_queue WHERE id = ?').run(id);
+  }
+
+  markActivityFailed(id: string, error: string, nextAttemptAt: number): void {
+    this.db
+      .prepare(
+        'UPDATE activity_queue SET attempts = attempts + 1, next_attempt_at = ?, last_error = ? WHERE id = ?',
+      )
+      .run(nextAttemptAt, error, id);
+  }
+
+  markActivityDeadLetter(id: string, error: string): void {
+    this.db
+      .prepare(
+        'UPDATE activity_queue SET attempts = attempts + 1, dead_lettered = 1, last_error = ? WHERE id = ?',
+      )
+      .run(error, id);
+  }
+
+  clearFailedActivity(): void {
+    this.db.prepare('DELETE FROM activity_queue WHERE dead_lettered = 1').run();
+  }
+
+  clearActivityQueue(): void {
+    this.db.prepare('DELETE FROM activity_queue').run();
   }
 
   getCachedProjects(workspaceId: string): Project[] | null {

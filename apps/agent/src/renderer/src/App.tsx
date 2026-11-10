@@ -486,6 +486,9 @@ export function App() {
       {timerError ? <p className="error">{timerError}</p> : null}
       {projectsError ? <p className="error">Projects: {projectsError}</p> : null}
       {tasksError ? <p className="error">Tasks: {tasksError}</p> : null}
+      {state.activityCaptureError ? (
+        <p className="error">Activity capture: {state.activityCaptureError}</p>
+      ) : null}
       {notice ? <p className="notice">{notice}</p> : null}
 
       <main className="content">
@@ -605,16 +608,19 @@ export function App() {
           <div>
             <h2>Offline queue</h2>
             <p className="muted small">
-              {state.pendingEntries === 0
+              {state.pendingEntries === 0 && state.pendingActivitySamples === 0
                 ? 'Everything is synced.'
                 : `${state.pendingEntries} ${
                     state.pendingEntries === 1 ? 'entry' : 'entries'
+                  }, ${state.pendingActivitySamples} activity ${
+                    state.pendingActivitySamples === 1 ? 'sample' : 'samples'
                   } waiting to sync.`}
             </p>
-            {state.failedEntries > 0 ? (
+            {state.failedEntries + state.failedActivitySamples > 0 ? (
               <p className="error small">
-                {state.failedEntries} rejected {state.failedEntries === 1 ? 'entry' : 'entries'}{' '}
-                will not be retried.
+                {state.failedEntries + state.failedActivitySamples} rejected{' '}
+                {state.failedEntries + state.failedActivitySamples === 1 ? 'item' : 'items'} will
+                not be retried.
               </p>
             ) : null}
           </div>
@@ -622,7 +628,7 @@ export function App() {
             <button className="ghost" type="button" onClick={() => void handleSync()}>
               Sync now
             </button>
-            {state.failedEntries > 0 ? (
+            {state.failedEntries + state.failedActivitySamples > 0 ? (
               <button className="ghost" type="button" onClick={() => void handleDiscardFailed()}>
                 Discard failed
               </button>

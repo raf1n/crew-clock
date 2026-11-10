@@ -4,6 +4,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 import { AppShell } from '@/components/layout/AppShell';
 import { useAppSelector } from '@/hooks';
+import { ActivityPage } from '@/pages/ActivityPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { DevicesPage } from '@/pages/DevicesPage';
 import { InvitePage } from '@/pages/InvitePage';
@@ -49,6 +50,7 @@ export const router = createBrowserRouter([
       { path: '/projects', element: <ProjectsPage /> },
       { path: '/timesheets', element: <TimesheetsPage /> },
       { path: '/reports', element: <ReportsPage /> },
+      { path: '/activity', element: <ActivityPage /> },
       { path: '/members', element: <MembersPage /> },
       { path: '/devices', element: <DevicesPage /> },
     ],

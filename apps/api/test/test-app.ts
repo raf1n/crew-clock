@@ -57,7 +57,7 @@ export async function createTestApp(): Promise<TestApp> {
 
   const dataSource = app.get<DataSource>(getDataSourceToken());
   await dataSource.query(
-    'TRUNCATE TABLE "devices", "tasks", "projects", "refresh_tokens", "members", "workspaces", "users" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "activity_samples", "devices", "tasks", "projects", "refresh_tokens", "members", "workspaces", "users" RESTART IDENTITY CASCADE',
   );
 
   return { app, server: app.getHttpServer() as Server, dataSource };

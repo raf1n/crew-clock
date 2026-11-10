@@ -10,6 +10,12 @@ export const createWorkspaceSchema = z.object({
 
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
 
+export const updateWorkspaceSettingsSchema = z.object({
+  activityRetentionDays: z.number().int().min(1).max(3650),
+});
+
+export type UpdateWorkspaceSettingsInput = z.infer<typeof updateWorkspaceSettingsSchema>;
+
 export const addMemberSchema = z.object({
   email: emailSchema,
   role: z.enum(ROLES),
@@ -20,6 +26,7 @@ export type AddMemberInput = z.infer<typeof addMemberSchema>;
 export interface Workspace {
   id: string;
   name: string;
+  activityRetentionDays: number;
   createdAt: string;
   updatedAt: string;
 }

@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -14,6 +15,7 @@ import {
   addMemberSchema,
   createWorkspaceSchema,
   inviteMemberSchema,
+  updateWorkspaceSettingsSchema,
   type AddMemberInput,
   type CreateInvitationResult,
   type CreateWorkspaceInput,
@@ -21,6 +23,7 @@ import {
   type InviteMemberInput,
   type Member,
   type MemberWithUser,
+  type UpdateWorkspaceSettingsInput,
   type WorkspaceMembership,
 } from '@crewclock/shared';
 
@@ -54,6 +57,18 @@ export class WorkspacesController {
     @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
   ): Promise<WorkspaceMembership> {
     return this.workspaces.getForUser(current.userId, workspaceId);
+  }
+
+  @UseGuards(WorkspaceRolesGuard)
+  @WorkspaceRoles('owner', 'manager')
+  @Patch(':workspaceId')
+  updateSettings(
+    @CurrentUser() current: AuthenticatedUser,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Body(new ZodValidationPipe(updateWorkspaceSettingsSchema))
+    input: UpdateWorkspaceSettingsInput,
+  ): Promise<WorkspaceMembership> {
+    return this.workspaces.updateSettings(current.userId, workspaceId, input);
   }
 
   @Get(':workspaceId/members')
