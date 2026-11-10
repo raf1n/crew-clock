@@ -31,7 +31,7 @@ export function DashboardPage() {
         title="Dashboard"
         description={
           isMember
-            ? 'Track your work and review recent activity.'
+            ? 'Log your work and review recent activity.'
             : 'Monitor team time, approvals, and recent activity.'
         }
       />

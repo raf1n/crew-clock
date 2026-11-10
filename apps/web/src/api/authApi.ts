@@ -1,5 +1,6 @@
 import { baseApi } from './baseApi';
 import { clearCredentials, setCredentials } from '../features/auth/authSlice';
+import { browserTimeZone } from '@/lib/format';
 import type {
   AcceptInviteRegistrationInput,
   AuthResponse,
@@ -7,10 +8,14 @@ import type {
   RegisterInput,
 } from '@crewclock/shared';
 
+function withTimezone<T extends object>(body: T): T & { timezone: string } {
+  return { ...body, timezone: browserTimeZone() };
+}
+
 export const authApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     login: builder.mutation<AuthResponse, LoginInput>({
-      query: (body) => ({ url: '/auth/login', method: 'POST', body }),
+      query: (body) => ({ url: '/auth/login', method: 'POST', body: withTimezone(body) }),
       async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
         try {
           const { data } = await queryFulfilled;
@@ -21,7 +26,7 @@ export const authApi = baseApi.injectEndpoints({
       },
     }),
     register: builder.mutation<AuthResponse, RegisterInput>({
-      query: (body) => ({ url: '/auth/register', method: 'POST', body }),
+      query: (body) => ({ url: '/auth/register', method: 'POST', body: withTimezone(body) }),
       async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
         try {
           const { data } = await queryFulfilled;
@@ -32,7 +37,11 @@ export const authApi = baseApi.injectEndpoints({
       },
     }),
     acceptInviteRegistration: builder.mutation<AuthResponse, AcceptInviteRegistrationInput>({
-      query: (body) => ({ url: '/auth/accept-invite', method: 'POST', body }),
+      query: (body) => ({
+        url: '/auth/accept-invite',
+        method: 'POST',
+        body: withTimezone(body),
+      }),
       async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
         try {
           const { data } = await queryFulfilled;
@@ -44,7 +53,11 @@ export const authApi = baseApi.injectEndpoints({
       },
     }),
     refreshSession: builder.mutation<AuthResponse, void>({
-      query: () => ({ url: '/auth/refresh', method: 'POST', body: {} }),
+      query: () => ({
+        url: '/auth/refresh',
+        method: 'POST',
+        body: { timezone: browserTimeZone() },
+      }),
       async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
         try {
           const { data } = await queryFulfilled;

@@ -7,14 +7,16 @@
   },
   "scripts": {
     "build:shared": "pnpm --filter @crewclock/shared build",
-    "build": "pnpm build:shared && pnpm --filter @crewclock/api build && pnpm --filter @crewclock/web build",
+    "build": "pnpm build:shared && pnpm --filter @crewclock/api build && pnpm --filter @crewclock/web build && pnpm --filter @crewclock/agent build",
     "dev": "pnpm build:shared && pnpm --parallel --filter @crewclock/api --filter @crewclock/web dev",
+    "dev:all": "pnpm build:shared && pnpm --parallel --filter @crewclock/api --filter @crewclock/web --filter @crewclock/agent dev",
     "dev:api": "pnpm build:shared && pnpm --filter @crewclock/api dev",
     "dev:web": "pnpm build:shared && pnpm --filter @crewclock/web dev",
+    "dev:agent": "pnpm build:shared && pnpm --filter @crewclock/agent dev",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "pnpm build:shared && pnpm --filter @crewclock/shared typecheck && pnpm --filter @crewclock/api typecheck && pnpm --filter @crewclock/web typecheck",
+    "typecheck": "pnpm build:shared && pnpm --filter @crewclock/shared typecheck && pnpm --filter @crewclock/api typecheck && pnpm --filter @crewclock/web typecheck && pnpm --filter @crewclock/agent typecheck",
     "test": "pnpm build:shared && pnpm -r test",
     "test:e2e": "pnpm build:shared && pnpm --filter @crewclock/api test:e2e",
     "db:up": "docker compose up -d",
@@ -32,7 +34,9 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "argon2"
+      "argon2",
+      "better-sqlite3",
+      "electron"
     ]
   }
 }

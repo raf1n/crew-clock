@@ -36,7 +36,7 @@ export function TimesheetsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Timesheets"
-        description="Review, submit, and approve weekly time. Weeks run Monday–Sunday (UTC)."
+        description="Review, submit, and approve weekly time. Weeks run Monday–Sunday in your timezone."
         actions={
           <div className="flex items-center gap-2">
             <Label htmlFor="week-start" className="text-muted-foreground">

@@ -13,7 +13,10 @@ export function formatDateTime(iso: string): string {
 }
 
 export function toDateInput(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export function todayInput(): string {
@@ -22,27 +25,42 @@ export function todayInput(): string {
 
 export function daysAgoInput(days: number): string {
   const date = new Date();
-  date.setUTCDate(date.getUTCDate() - days);
+  date.setDate(date.getDate() - days);
   return toDateInput(date);
 }
 
 export function startOfDayIso(dateInput: string): string {
-  return new Date(`${dateInput}T00:00:00.000Z`).toISOString();
+  return localDate(dateInput).toISOString();
 }
 
 export function endOfDayIso(dateInput: string): string {
-  return new Date(new Date(`${dateInput}T00:00:00.000Z`).getTime() + 86_400_000).toISOString();
-}
-
-export function startOfWeekIso(dateInput = todayInput()): string {
-  const date = new Date(`${dateInput}T00:00:00.000Z`);
-  const offset = (date.getUTCDay() + 6) % 7;
-  date.setUTCDate(date.getUTCDate() - offset);
+  const date = localDate(dateInput);
+  date.setDate(date.getDate() + 1);
   return date.toISOString();
 }
 
+export function startOfWeekIso(dateInput = todayInput()): string {
+  return startOfWeekDate(dateInput).toISOString();
+}
+
 export function startOfWeekInput(dateInput = todayInput()): string {
-  return startOfWeekIso(dateInput).slice(0, 10);
+  return toDateInput(startOfWeekDate(dateInput));
+}
+
+export function browserTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+}
+
+function startOfWeekDate(dateInput: string): Date {
+  const date = localDate(dateInput);
+  const offset = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - offset);
+  return date;
+}
+
+function localDate(dateInput: string): Date {
+  const [year = 1970, month = 1, day = 1] = dateInput.split('-').map(Number);
+  return new Date(year, month - 1, day);
 }
 
 export function formatLabel(value: string): string {

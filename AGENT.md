@@ -28,7 +28,7 @@ Components:
 ```
 apps/
   api/          NestJS backend
-  web/          Next.js dashboard
+  web/          Vite + React dashboard
   agent/        Electron desktop agent
   extension/    Browser extension
 packages/
@@ -45,9 +45,11 @@ docker compose up -d      # start Postgres, Redis, pgAdmin, MinIO (profile: stor
 # pgAdmin: http://localhost:5050 — admin@example.com / admin
 # DB connection: host "postgres", port 5432, database "time_tracker", user "postgres" / "postgres"
 pnpm dev                  # run API + dashboard together
+pnpm dev:all              # run API + dashboard + desktop agent
 pnpm --filter @crewclock/api dev      # run API only
 pnpm --filter @crewclock/web dev      # run dashboard only
-pnpm --filter agent dev   # run desktop agent
+pnpm --filter @crewclock/agent dev    # run desktop agent
+pnpm --filter @crewclock/agent dist   # package desktop agent
 pnpm lint                 # lint all workspaces
 pnpm typecheck            # type-check all workspaces
 pnpm test                 # run all tests
@@ -57,14 +59,16 @@ Run `pnpm lint && pnpm typecheck && pnpm test` before considering a task done.
 
 ## Domain model (core tables)
 
-`users`, `workspaces`, `members` (user + workspace + role), `projects`, `tasks`, `time_entries`, `activity_samples`, `screenshots`, `timesheets`, `invoices`.
+`users`, `workspaces`, `members` (user + workspace + role), `devices`, `projects`, `tasks`, `time_entries`, `activity_samples`, `screenshots`, `timesheets`, `invoices`.
 
 Rules:
 
 - **Every tenant-owned table has `workspace_id`**, and every query must be scoped by it. Never return data across workspaces.
 - Roles: `owner`, `manager`, `member`. Members see only their own data unless a manager or owner grants more. Only members can create or modify time entries; owners and managers review time, timesheets, and reports. Members can update the status of tasks assigned to them; other task fields stay owner/manager-only.
 - Workspace invitations are link-based: owners/managers create an invite (managers may only invite members), the raw token is returned once and stored as a SHA-256 hash with a 7-day expiry. Existing users accept after signing in with the invited email; new users accept in one step via `POST /auth/accept-invite` (sets a password and joins without creating their own workspace). There is no email delivery service yet; the UI exposes a copyable invite link.
-- `time_entries` store `started_at` and `ended_at` as UTC timestamps. Never store elapsed seconds as the source of truth. Overlaps per user are rejected by a database exclusion constraint, and entries in submitted or approved `timesheets` weeks are locked from edits. Members (or a manager) can withdraw a submitted week back to draft; approved weeks are final.
+- `time_entries` store `started_at` and `ended_at` as UTC timestamps. Never store elapsed seconds as the source of truth. Each entry stores the user's IANA timezone at creation; week locking and reporting group using that timezone. Overlaps per user are rejected by a database exclusion constraint, and entries in submitted or approved `timesheets` weeks are locked from edits. Members (or a manager) can withdraw a submitted week back to draft; approved weeks are final. Agent-created entries carry a client-generated `client_id`, unique per workspace/user, so offline replays are idempotent.
+- `users` store an IANA `timezone`. Login and refresh accept the client timezone, and agent heartbeats update it. Reports, timesheets, dashboard day/week ranges, and entry locking all use the user's timezone; timestamps remain UTC in storage.
+- `devices` hold SHA-256 hashed per-device tokens. Only members can register devices; owners/managers can list and revoke them. A revoked or non-member device token is rejected. Agent ingestion uses the device token, never a user's access token.
 - `activity_samples` are high-volume. Keep them compact (one row per interval, e.g. 1 to 10 minutes) and plan for monthly partitioning.
 - Use UUIDs for primary keys. All entities extend `BaseEntity` (`id`, `created_at`, `updated_at`, `deleted_at`, `is_active`, `created_by`, `updated_by`, `deleted_by`). Audit fields are `UserEntity` relations backed by `created_by`-style columns; set the `*ById` properties from services.
 - Soft-delete through `deleted_at`/`deleted_by` where history matters; do not hard-delete rows referenced by time entries.
@@ -121,10 +125,15 @@ Rules:
 
 ### Desktop agent
 
-- The agent must work **offline**: write to the local SQLite queue first, then sync in batches with retries and idempotency keys.
+- Keep the Electron main process split by responsibility (`window`, `tray`, `ipc`, `device-setup`, `state`, `timer`, `sync`). Renderer code never gets Node access.
+- Validate every IPC payload with the shared Zod schemas before touching SQLite or the network.
+- The agent must work **offline**: write to the local SQLite queue first, then sync in batches with retries, jitter, and idempotency keys. Rejected `4xx` entries go to a dead-letter queue instead of retrying forever.
 - Timestamps come from UTC and are sent with the sample interval, so the server can detect gaps or clock drift.
+- Idle detection uses Electron `powerMonitor.getSystemIdleTime()`. After 5 idle minutes the current segment is saved with its `idleSeconds`, and the session is paused with its project/task preserved. It auto-resumes when input returns within 10 minutes; after that, the user gets a one-click Resume. Suspend and lock-screen also pause the session. Restart recovery truncates stale running sessions.
 - Platform-specific code (permissions, active-window, screenshots) is isolated behind interfaces so Windows, macOS, and Linux can differ.
 - Never block the main process. Capture and sync run in background workers.
+- The app enforces a single instance, denies renderer permission requests, and blocks navigation/new windows. Device tokens are encrypted with `safeStorage` when available.
+- Packaging uses `electron-builder`; macOS releases still require Developer ID signing/notarization and Windows releases require code signing.
 
 ### Browser extension
 

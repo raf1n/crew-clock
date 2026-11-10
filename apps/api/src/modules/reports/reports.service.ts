@@ -13,6 +13,8 @@ import { Repository } from 'typeorm';
 
 import { WorkspacesService } from '../workspaces/workspaces.service';
 import { TimeEntryEntity } from '../time-entries/entities/time-entry.entity';
+import { UsersService } from '../users/users.service';
+import { addDaysToParts, datePartsInTimeZone, formatDateParts } from '../../common/utils/timezone';
 
 @Injectable()
 export class ReportsService {
@@ -20,6 +22,7 @@ export class ReportsService {
     @InjectRepository(TimeEntryEntity)
     private readonly entries: Repository<TimeEntryEntity>,
     private readonly workspaces: WorkspacesService,
+    private readonly users: UsersService,
   ) {}
 
   async timeReport(actorId: string, workspaceId: string, query: ReportQuery): Promise<TimeReport> {
@@ -98,10 +101,11 @@ export class ReportsService {
   ): Promise<DailyTimeReport> {
     const membership = await this.workspaces.getMembership(actorId, workspaceId);
     const scopedUserId = roleAtLeast(membership.role, 'manager') ? query.userId : actorId;
+    const timezone = await this.users.getTimezone(actorId);
 
     const from = new Date(query.from);
     const to = new Date(query.to);
-    const dates = buildDates(from, to);
+    const dates = buildDates(from, to, timezone);
     if (dates.length > 92) {
       throw new BadRequestException('Date range is too large (maximum 92 days)');
     }
@@ -111,7 +115,7 @@ export class ReportsService {
       .innerJoin('users', 'memberUser', 'memberUser.id = entry.user_id')
       .select('entry.user_id', 'userId')
       .addSelect('memberUser.name', 'name')
-      .addSelect("to_char(entry.started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')", 'date')
+      .addSelect("to_char(entry.started_at AT TIME ZONE :timezone, 'YYYY-MM-DD')", 'date')
       .addSelect('SUM(EXTRACT(EPOCH FROM (entry.ended_at - entry.started_at)))', 'seconds')
       .addSelect('COUNT(*)', 'entryCount')
       .where('entry.workspace_id = :workspaceId', { workspaceId })
@@ -119,9 +123,10 @@ export class ReportsService {
       .andWhere('entry.ended_at IS NOT NULL')
       .andWhere('entry.started_at >= :from', { from })
       .andWhere('entry.started_at < :to', { to })
+      .setParameter('timezone', timezone)
       .groupBy('entry.user_id')
       .addGroupBy('memberUser.name')
-      .addGroupBy("to_char(entry.started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')")
+      .addGroupBy("to_char(entry.started_at AT TIME ZONE :timezone, 'YYYY-MM-DD')")
       .getRawMany<{
         userId: string;
         name: string;
@@ -175,12 +180,16 @@ export class ReportsService {
   }
 }
 
-function buildDates(from: Date, to: Date): string[] {
+function buildDates(from: Date, to: Date, timezone: string): string[] {
   const dates: string[] = [];
-  const cursor = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
-  while (cursor.getTime() < to.getTime()) {
-    dates.push(cursor.toISOString().slice(0, 10));
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  const first = datePartsInTimeZone(from, timezone);
+  const last = datePartsInTimeZone(new Date(to.getTime() - 1), timezone);
+  const endKey = formatDateParts(last);
+  let cursor = first;
+
+  while (formatDateParts(cursor) <= endKey) {
+    dates.push(formatDateParts(cursor));
+    cursor = addDaysToParts(cursor, 1);
   }
   return dates;
 }

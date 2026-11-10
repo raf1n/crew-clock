@@ -15,6 +15,8 @@ export const createTimeEntrySchema = z
     description: z.string().trim().max(2000).nullable().optional(),
     startedAt: isoDateTimeSchema,
     endedAt: isoDateTimeSchema,
+    clientId: z.uuid().optional(),
+    idleSeconds: z.number().int().min(0).max(604_800).optional(),
   })
   .refine((value) => new Date(value.endedAt).getTime() > new Date(value.startedAt).getTime(), {
     message: 'endedAt must be after startedAt',
@@ -71,6 +73,9 @@ export interface TimeEntry {
   endedAt: string | null;
   durationSeconds: number | null;
   source: TimeEntrySource;
+  clientId: string | null;
+  idleSeconds: number;
+  timezone: string;
   createdBy: string | null;
   updatedBy: string | null;
   createdAt: string;

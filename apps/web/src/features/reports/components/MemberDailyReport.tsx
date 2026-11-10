@@ -15,10 +15,10 @@ import {
 import { formatDuration } from '@/lib/format';
 
 function formatDay(date: string): string {
-  return new Date(`${date}T00:00:00.000Z`).toLocaleDateString(undefined, {
+  const [year = 1970, month = 1, day = 1] = date.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, {
     weekday: 'short',
     day: 'numeric',
-    timeZone: 'UTC',
   });
 }
 
@@ -40,7 +40,7 @@ export function MemberDailyReport({
       <CardHeader>
         <CardTitle>{isManager ? 'Daily by member' : 'Your daily time'}</CardTitle>
         <CardDescription>
-          {isManager ? 'Time per member per UTC day.' : 'Your tracked time per UTC day.'}
+          {isManager ? 'Time per member per day.' : 'Your tracked time per day.'}
         </CardDescription>
       </CardHeader>
       <CardContent>

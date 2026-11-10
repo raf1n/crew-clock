@@ -5,6 +5,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { useAppSelector } from '@/hooks';
 import { DashboardPage } from '@/pages/DashboardPage';
+import { DevicesPage } from '@/pages/DevicesPage';
 import { InvitePage } from '@/pages/InvitePage';
 import { LoginPage } from '@/pages/LoginPage';
 import { MembersPage } from '@/pages/MembersPage';
@@ -49,6 +50,7 @@ export const router = createBrowserRouter([
       { path: '/timesheets', element: <TimesheetsPage /> },
       { path: '/reports', element: <ReportsPage /> },
       { path: '/members', element: <MembersPage /> },
+      { path: '/devices', element: <DevicesPage /> },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },

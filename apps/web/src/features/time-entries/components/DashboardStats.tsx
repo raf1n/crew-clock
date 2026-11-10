@@ -1,7 +1,6 @@
-import { CalendarClock, CalendarDays, FolderKanban, Timer } from 'lucide-react';
+import { CalendarClock, CalendarDays, FolderKanban, ListChecks } from 'lucide-react';
 
 import { useGetProjectsQuery } from '@/api/projectsApi';
-import { useGetRunningQuery } from '@/api/timeEntriesApi';
 import { useGetTimeReportQuery } from '@/api/reportsApi';
 import { StatCard } from '@/components/shared/StatCard';
 import {
@@ -30,26 +29,23 @@ export function DashboardStats({ workspaceId }: { workspaceId: string }) {
     groupBy: 'project',
   });
   const { data: projects } = useGetProjectsQuery({ workspaceId });
-  const { data: runningData } = useGetRunningQuery(workspaceId);
-  const running = runningData?.id ? runningData : null;
   const todayEntries =
     todayReport?.groups.reduce((total, group) => total + group.entryCount, 0) ?? 0;
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard
-        label="Status"
-        value={running ? 'Tracking' : 'Idle'}
-        hint={running ? 'Timer is running' : 'No timer running'}
-        icon={Timer}
-        tone={running ? 'green' : 'slate'}
-      />
-      <StatCard
         label="Today"
         value={formatDuration(todayReport?.totalSeconds ?? 0)}
-        hint={`${todayEntries} ${todayEntries === 1 ? 'entry' : 'entries'}`}
+        hint="Tracked today"
         icon={CalendarDays}
         tone="blue"
+      />
+      <StatCard
+        label="Entries today"
+        value={todayEntries}
+        hint={`${todayEntries === 1 ? 'Entry' : 'Entries'} logged`}
+        icon={ListChecks}
       />
       <StatCard
         label="This week"

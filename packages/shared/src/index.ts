@@ -1,4 +1,5 @@
 export * from './auth';
+export * from './devices';
 export * from './pagination';
 export * from './projects';
 export * from './reports';
@@ -6,5 +7,6 @@ export * from './roles';
 export * from './tasks';
 export * from './time-entries';
 export * from './timesheets';
+export * from './timezones';
 export * from './users';
 export * from './workspaces';

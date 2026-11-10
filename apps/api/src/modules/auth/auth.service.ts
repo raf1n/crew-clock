@@ -12,6 +12,7 @@ import type {
   PublicUser,
   RegisterInput,
 } from '@crewclock/shared';
+import { DEFAULT_TIMEZONE } from '@crewclock/shared';
 import { DataSource, IsNull, Repository } from 'typeorm';
 
 import { toPublicUser } from '../users/mappers/user.mapper';
@@ -20,7 +21,7 @@ import { UsersService } from '../users/users.service';
 import { WorkspacesService } from '../workspaces/workspaces.service';
 import { hashPassword, verifyPassword } from './utils/password.util';
 import { RefreshTokenEntity } from './entities/refresh-token.entity';
-import { hashToken, tokenHashMatches } from './utils/token-hash.util';
+import { hashToken, tokenHashMatches } from '../../common/utils/token-hash';
 import type { AccessTokenPayload, RefreshTokenPayload } from './types/token-payload';
 
 @Injectable()
@@ -51,6 +52,7 @@ export class AuthService {
           email: input.email,
           name: input.name,
           passwordHash,
+          timezone: input.timezone ?? DEFAULT_TIMEZONE,
         });
         await users.save(created);
         await this.workspaces.createForUser(created.id, input.workspaceName, manager);
@@ -85,6 +87,7 @@ export class AuthService {
           email: preview.email,
           name: input.name,
           passwordHash,
+          timezone: input.timezone ?? DEFAULT_TIMEZONE,
         });
         await users.save(created);
         await this.workspaces.acceptInvitationWithManager(
@@ -118,10 +121,15 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    if (input.timezone && input.timezone !== user.timezone) {
+      user.timezone = input.timezone;
+      await this.users.setTimezone(user.id, input.timezone);
+    }
+
     return { user: toPublicUser(user), ...(await this.issueTokens(user)) };
   }
 
-  async refresh(token: string): Promise<AuthResponse> {
+  async refresh(token: string, timezone?: string): Promise<AuthResponse> {
     const payload = await this.verifyRefreshToken(token);
     const stored = await this.refreshTokens.findOne({
       where: { id: payload.jti, userId: payload.sub },
@@ -159,6 +167,10 @@ export class AuthService {
     const user = await this.users.findById(payload.sub);
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Account is not active');
+    }
+    if (timezone && timezone !== user.timezone) {
+      user.timezone = timezone;
+      await this.users.setTimezone(user.id, timezone);
     }
 
     return { user: toPublicUser(user), ...(await this.issueTokens(user)) };

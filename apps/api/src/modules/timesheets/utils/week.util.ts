@@ -1,37 +1,51 @@
 import { BadRequestException } from '@nestjs/common';
+import { DEFAULT_TIMEZONE } from '@crewclock/shared';
+
+import {
+  addDaysToParts,
+  datePartsInTimeZone,
+  formatDateParts,
+  parseDateString,
+  weekdayOfParts,
+  zonedTimeToUtc,
+  type DateParts,
+} from '../../../common/utils/timezone';
 
 export interface WeekRange {
   periodStart: string;
   periodEnd: string;
+  startAt: Date;
+  endAt: Date;
+  timezone: string;
 }
 
-export function resolveWeek(weekStart?: string): WeekRange {
-  return buildWeek(weekStart ? parseDate(weekStart) : new Date());
+export function resolveWeek(weekStart?: string, timezone = DEFAULT_TIMEZONE): WeekRange {
+  const parts = weekStart ? parseWeekStart(weekStart) : datePartsInTimeZone(new Date(), timezone);
+  return buildWeek(parts, timezone);
 }
 
-export function resolveWeekForDate(date: Date): WeekRange {
-  return buildWeek(date);
+export function resolveWeekForDate(date: Date, timezone = DEFAULT_TIMEZONE): WeekRange {
+  return buildWeek(datePartsInTimeZone(date, timezone), timezone);
 }
 
-function buildWeek(base: Date): WeekRange {
-  const day = base.getUTCDay();
-  const mondayOffset = (day + 6) % 7;
-  const monday = new Date(
-    Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate() - mondayOffset),
-  );
-  const sunday = new Date(monday.getTime() + 7 * 24 * 60 * 60 * 1000);
+function buildWeek(parts: DateParts, timezone: string): WeekRange {
+  const mondayOffset = (weekdayOfParts(parts) + 6) % 7;
+  const monday = addDaysToParts(parts, -mondayOffset);
+  const nextMonday = addDaysToParts(monday, 7);
 
-  return { periodStart: formatDate(monday), periodEnd: formatDate(sunday) };
+  return {
+    periodStart: formatDateParts(monday),
+    periodEnd: formatDateParts(nextMonday),
+    startAt: zonedTimeToUtc(monday, timezone),
+    endAt: zonedTimeToUtc(nextMonday, timezone),
+    timezone,
+  };
 }
 
-function parseDate(value: string): Date {
-  const date = new Date(`${value}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime()) || formatDate(date) !== value) {
+function parseWeekStart(value: string): DateParts {
+  try {
+    return parseDateString(value);
+  } catch {
     throw new BadRequestException('Invalid weekStart date');
   }
-  return date;
-}
-
-function formatDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
 }

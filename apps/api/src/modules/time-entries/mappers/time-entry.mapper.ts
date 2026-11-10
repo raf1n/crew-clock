@@ -16,6 +16,9 @@ export function toTimeEntry(entry: TimeEntryEntity): TimeEntry {
       ? Math.max(0, Math.floor((entry.endedAt.getTime() - entry.startedAt.getTime()) / 1000))
       : null,
     source: entry.source,
+    clientId: entry.clientId,
+    idleSeconds: entry.idleSeconds,
+    timezone: entry.timezone,
     createdBy: entry.createdById,
     updatedBy: entry.updatedById,
     createdAt: entry.createdAt.toISOString(),

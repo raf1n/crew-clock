@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 
 import { useGetTimeReportQuery } from '@/api/reportsApi';
 import { useListTimesheetsQuery } from '@/api/timesheetsApi';
-import { useGetRunningQuery } from '@/api/timeEntriesApi';
 import { useGetMembersQuery } from '@/api/workspacesApi';
 import { UserAvatar } from '@/components/shared/UserAvatar';
 import { Badge } from '@/components/ui/badge';
@@ -39,10 +38,6 @@ export function RightRail() {
     { skip: !workspace },
   );
   const { data: members } = useGetMembersQuery(workspaceId, { skip: !workspace });
-  const { data: runningData } = useGetRunningQuery(workspaceId, {
-    skip: !workspace || isManager,
-    pollingInterval: 5000,
-  });
   const { data: timesheets } = useListTimesheetsQuery(
     { workspaceId, weekStart: today },
     { skip: !workspace || !isManager },
@@ -64,7 +59,6 @@ export function RightRail() {
   const goalPercent = Math.min(100, Math.round((todaySeconds / DAILY_GOAL_SECONDS) * 100));
   const activePercent = totalMembers ? Math.round((activeMembers / totalMembers) * 100) : 0;
   const ringPercent = isManager ? activePercent : goalPercent;
-  const running = runningData?.id ? runningData : null;
   const allWeekGroups = (weekReport?.groups ?? []).filter(
     (group) => group.key !== null && trackableIds.has(group.key),
   );
@@ -75,14 +69,16 @@ export function RightRail() {
   const pendingApprovals = (timesheets ?? []).filter((sheet) => sheet.status === 'submitted');
   const memberName = (userId: string): string => memberById.get(userId)?.user.name ?? userId;
 
-  const badgeLabel = isManager ? `${activeMembers} active` : running ? 'Tracking' : 'Idle';
+  const badgeLabel = isManager
+    ? `${activeMembers} active`
+    : `${todayEntries} ${todayEntries === 1 ? 'entry' : 'entries'}`;
 
   return (
     <aside className="hidden h-dvh w-72 shrink-0 flex-col gap-4 overflow-y-auto border-l bg-card px-4 py-6 2xl:flex">
       <Card className="gap-4 py-4">
         <CardHeader className="flex flex-row items-center justify-between px-4">
           <CardTitle className="text-sm">Today</CardTitle>
-          <Badge variant={isManager || running ? 'default' : 'secondary'}>{badgeLabel}</Badge>
+          <Badge variant={isManager ? 'default' : 'secondary'}>{badgeLabel}</Badge>
         </CardHeader>
         <CardContent className="flex items-center gap-4 px-4">
           <div
@@ -112,15 +108,6 @@ export function RightRail() {
                   : `${activeMembers} of ${totalMembers} members active`
                 : `${todayEntries} ${todayEntries === 1 ? 'entry' : 'entries'}`}
             </p>
-            {!isManager && running ? (
-              <p className="text-xs text-muted-foreground">
-                Running since{' '}
-                {new Date(running.startedAt).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </p>
-            ) : null}
           </div>
         </CardContent>
       </Card>

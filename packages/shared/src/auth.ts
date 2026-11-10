@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { timezoneSchema } from './timezones';
 import type { PublicUser } from './users';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -24,6 +25,7 @@ export const registerSchema = z.object({
   password: passwordSchema,
   name: displayNameSchema,
   workspaceName: z.string().trim().min(1).max(100),
+  timezone: timezoneSchema.optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;
@@ -32,6 +34,7 @@ export const acceptInviteRegistrationSchema = z.object({
   token: z.string().min(1),
   name: displayNameSchema,
   password: passwordSchema,
+  timezone: timezoneSchema.optional(),
 });
 
 export type AcceptInviteRegistrationInput = z.infer<typeof acceptInviteRegistrationSchema>;
@@ -39,12 +42,14 @@ export type AcceptInviteRegistrationInput = z.infer<typeof acceptInviteRegistrat
 export const loginSchema = z.object({
   email: emailSchema,
   password: z.string().min(1).max(128),
+  timezone: timezoneSchema.optional(),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
 
 export const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1).optional(),
+  timezone: timezoneSchema.optional(),
 });
 
 export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;

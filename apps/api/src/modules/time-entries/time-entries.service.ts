@@ -17,11 +17,12 @@ import {
 } from '@crewclock/shared';
 import { IsNull, Repository } from 'typeorm';
 
-import { isOverlapViolation } from '../../common/database-errors';
+import { isOverlapViolation, isUniqueViolation } from '../../common/database-errors';
 import { ProjectsService } from '../projects/projects.service';
 import { TaskEntity } from '../tasks/entities/task.entity';
 import { TimesheetEntity } from '../timesheets/entities/timesheet.entity';
 import { resolveWeekForDate } from '../timesheets/utils/week.util';
+import { UsersService } from '../users/users.service';
 import { WorkspacesService } from '../workspaces/workspaces.service';
 import { TimeEntryEntity } from './entities/time-entry.entity';
 import { toTimeEntry } from './mappers/time-entry.mapper';
@@ -37,6 +38,7 @@ export class TimeEntriesService {
     private readonly timesheets: Repository<TimesheetEntity>,
     private readonly projects: ProjectsService,
     private readonly workspaces: WorkspacesService,
+    private readonly users: UsersService,
   ) {}
 
   async list(
@@ -102,12 +104,23 @@ export class TimeEntriesService {
     input: CreateTimeEntryInput,
   ): Promise<TimeEntry> {
     await this.assertCanTrack(actorId, workspaceId);
+
+    if (input.clientId) {
+      const existing = await this.entries.findOne({
+        where: { workspaceId, userId: actorId, clientId: input.clientId },
+      });
+      if (existing) {
+        return toTimeEntry(existing);
+      }
+    }
+
     await this.assertProjectAndTask(actorId, workspaceId, input.projectId, input.taskId ?? null);
 
+    const timezone = await this.users.getTimezone(actorId);
     const startedAt = new Date(input.startedAt);
     const endedAt = new Date(input.endedAt);
     assertRange(startedAt, endedAt);
-    await this.assertWeekEditable(actorId, workspaceId, startedAt);
+    await this.assertWeekEditable(actorId, workspaceId, startedAt, timezone);
 
     const entry = this.entries.create({
       workspaceId,
@@ -118,11 +131,27 @@ export class TimeEntriesService {
       startedAt,
       endedAt,
       source: 'manual',
+      clientId: input.clientId ?? null,
+      idleSeconds: input.idleSeconds ?? 0,
+      timezone,
       createdById: actorId,
       updatedById: actorId,
     });
 
-    await this.save(entry);
+    try {
+      await this.save(entry);
+    } catch (error) {
+      if (input.clientId && isUniqueViolation(error)) {
+        const existing = await this.entries.findOne({
+          where: { workspaceId, userId: actorId, clientId: input.clientId },
+        });
+        if (existing) {
+          return toTimeEntry(existing);
+        }
+      }
+      throw error;
+    }
+
     return toTimeEntry(entry);
   }
 
@@ -134,8 +163,9 @@ export class TimeEntriesService {
     await this.assertCanTrack(actorId, workspaceId);
     await this.assertProjectAndTask(actorId, workspaceId, input.projectId, input.taskId ?? null);
 
+    const timezone = await this.users.getTimezone(actorId);
     const startedAt = new Date();
-    await this.assertWeekEditable(actorId, workspaceId, startedAt);
+    await this.assertWeekEditable(actorId, workspaceId, startedAt, timezone);
 
     const running = await this.entries.findOne({
       where: { userId: actorId, endedAt: IsNull() },
@@ -153,6 +183,7 @@ export class TimeEntriesService {
       startedAt,
       endedAt: null,
       source: 'timer',
+      timezone,
       createdById: actorId,
       updatedById: actorId,
     });
@@ -186,7 +217,7 @@ export class TimeEntriesService {
   ): Promise<TimeEntry> {
     await this.assertCanTrack(actorId, workspaceId);
     const entry = await this.getAccessibleEntry(actorId, workspaceId, entryId);
-    await this.assertWeekEditable(entry.userId, workspaceId, entry.startedAt);
+    await this.assertWeekEditable(entry.userId, workspaceId, entry.startedAt, entry.timezone);
 
     if (entry.endedAt === null && (input.startedAt || input.endedAt)) {
       throw new ConflictException('Stop the timer before editing its times');
@@ -213,7 +244,7 @@ export class TimeEntriesService {
     assertRange(startedAt, endedAt);
 
     if (startedAt.getTime() !== entry.startedAt.getTime()) {
-      await this.assertWeekEditable(entry.userId, workspaceId, startedAt);
+      await this.assertWeekEditable(entry.userId, workspaceId, startedAt, entry.timezone);
     }
 
     entry.projectId = projectId;
@@ -232,7 +263,7 @@ export class TimeEntriesService {
   async remove(actorId: string, workspaceId: string, entryId: string): Promise<void> {
     await this.assertCanTrack(actorId, workspaceId);
     const entry = await this.getAccessibleEntry(actorId, workspaceId, entryId);
-    await this.assertWeekEditable(entry.userId, workspaceId, entry.startedAt);
+    await this.assertWeekEditable(entry.userId, workspaceId, entry.startedAt, entry.timezone);
 
     await this.entries.update(
       { id: entry.id },
@@ -286,8 +317,13 @@ export class TimeEntriesService {
     }
   }
 
-  private async assertWeekEditable(userId: string, workspaceId: string, at: Date): Promise<void> {
-    const { periodStart } = resolveWeekForDate(at);
+  private async assertWeekEditable(
+    userId: string,
+    workspaceId: string,
+    at: Date,
+    timezone: string,
+  ): Promise<void> {
+    const { periodStart } = resolveWeekForDate(at, timezone);
     const timesheet = await this.timesheets.findOne({
       where: { workspaceId, userId, periodStart },
     });

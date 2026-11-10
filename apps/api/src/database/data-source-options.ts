@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { DataSourceOptions } from 'typeorm';
 
 import { RefreshTokenEntity } from '../modules/auth/entities/refresh-token.entity';
+import { DeviceEntity } from '../modules/devices/entities/device.entity';
 import { ProjectEntity } from '../modules/projects/entities/project.entity';
 import { TaskEntity } from '../modules/tasks/entities/task.entity';
 import { TimeEntryEntity } from '../modules/time-entries/entities/time-entry.entity';
@@ -24,6 +25,7 @@ export function buildDataSourceOptions(url: string): DataSourceOptions {
       MemberEntity,
       WorkspaceInvitationEntity,
       RefreshTokenEntity,
+      DeviceEntity,
       ProjectEntity,
       TaskEntity,
       TimeEntryEntity,

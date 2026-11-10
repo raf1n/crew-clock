@@ -16,6 +16,7 @@ import { FindOptionsWhere, Repository } from 'typeorm';
 
 import { isUniqueViolation } from '../../common/database-errors';
 import { TimeEntryEntity } from '../time-entries/entities/time-entry.entity';
+import { UsersService } from '../users/users.service';
 import { WorkspacesService } from '../workspaces/workspaces.service';
 import { TimesheetEntity } from './entities/timesheet.entity';
 import { toTimesheetSummary } from './mappers/timesheet.mapper';
@@ -30,6 +31,7 @@ export class TimesheetsService {
     @InjectRepository(TimeEntryEntity)
     private readonly entries: Repository<TimeEntryEntity>,
     private readonly workspaces: WorkspacesService,
+    private readonly users: UsersService,
   ) {}
 
   async getMe(
@@ -38,8 +40,9 @@ export class TimesheetsService {
     query: TimesheetQuery,
   ): Promise<TimesheetSummary> {
     await this.workspaces.getMembership(actorId, workspaceId);
-    const week = resolveWeek(query.weekStart);
-    return this.buildSummary(workspaceId, actorId, week);
+    const timezone = await this.users.getTimezone(actorId);
+    const week = resolveWeek(query.weekStart, timezone);
+    return this.buildSummary(workspaceId, actorId, week, timezone);
   }
 
   async list(
@@ -48,7 +51,8 @@ export class TimesheetsService {
     query: TimesheetQuery,
   ): Promise<TimesheetSummary[]> {
     const membership = await this.workspaces.getMembership(actorId, workspaceId);
-    const week = resolveWeek(query.weekStart);
+    const timezone = await this.users.getTimezone(actorId);
+    const week = resolveWeek(query.weekStart, timezone);
 
     const where: FindOptionsWhere<TimesheetEntity> = {
       workspaceId,
@@ -59,7 +63,9 @@ export class TimesheetsService {
     }
 
     const rows = await this.timesheets.find({ where, order: { createdAt: 'ASC' } });
-    return Promise.all(rows.map((row) => this.buildSummary(workspaceId, row.userId, week)));
+    return Promise.all(
+      rows.map((row) => this.buildSummary(workspaceId, row.userId, week, timezone)),
+    );
   }
 
   async submit(
@@ -68,9 +74,10 @@ export class TimesheetsService {
     query: TimesheetQuery,
   ): Promise<TimesheetSummary> {
     await this.workspaces.getMembership(actorId, workspaceId);
-    const week = resolveWeek(query.weekStart);
+    const timezone = await this.users.getTimezone(actorId);
+    const week = resolveWeek(query.weekStart, timezone);
 
-    const totals = await this.totalsFor(workspaceId, actorId, week);
+    const totals = await this.totalsFor(workspaceId, actorId, week, timezone);
     if (totals.entryCount === 0) {
       throw new BadRequestException('No time entries to submit for this week');
     }
@@ -81,8 +88,8 @@ export class TimesheetsService {
       .andWhere('entry.user_id = :userId', { userId: actorId })
       .andWhere('entry.deleted_at IS NULL')
       .andWhere('entry.ended_at IS NULL')
-      .andWhere('entry.started_at >= :start', { start: `${week.periodStart}T00:00:00.000Z` })
-      .andWhere('entry.started_at < :end', { end: `${week.periodEnd}T00:00:00.000Z` })
+      .andWhere('entry.started_at >= :start', { start: week.startAt })
+      .andWhere('entry.started_at < :end', { end: week.endAt })
       .getCount();
 
     if (running > 0) {
@@ -159,10 +166,9 @@ export class TimesheetsService {
     timesheet.updatedById = actorId;
     await this.timesheets.save(timesheet);
 
-    const totals = await this.totalsFor(workspaceId, timesheet.userId, {
-      periodStart: timesheet.periodStart,
-      periodEnd: timesheet.periodEnd,
-    });
+    const timezone = await this.users.getTimezone(timesheet.userId);
+    const week = resolveWeek(timesheet.periodStart, timezone);
+    const totals = await this.totalsFor(workspaceId, timesheet.userId, week, timezone);
 
     return toTimesheetSummary({
       timesheet,
@@ -196,10 +202,9 @@ export class TimesheetsService {
     timesheet.updatedById = actorId;
     await this.timesheets.save(timesheet);
 
-    const totals = await this.totalsFor(workspaceId, timesheet.userId, {
-      periodStart: timesheet.periodStart,
-      periodEnd: timesheet.periodEnd,
-    });
+    const timezone = await this.users.getTimezone(timesheet.userId);
+    const week = resolveWeek(timesheet.periodStart, timezone);
+    const totals = await this.totalsFor(workspaceId, timesheet.userId, week, timezone);
 
     return toTimesheetSummary({
       timesheet,
@@ -215,9 +220,10 @@ export class TimesheetsService {
     workspaceId: string,
     userId: string,
     week: WeekRange,
+    timezone: string,
   ): Promise<TimesheetSummary> {
     const [totals, timesheet] = await Promise.all([
-      this.totalsFor(workspaceId, userId, week),
+      this.totalsFor(workspaceId, userId, week, timezone),
       this.findRow(workspaceId, userId, week.periodStart),
     ]);
 
@@ -243,6 +249,7 @@ export class TimesheetsService {
     workspaceId: string,
     userId: string,
     week: WeekRange,
+    timezone: string,
   ): Promise<TimesheetTotals> {
     const rows = await this.entries
       .createQueryBuilder('entry')
@@ -252,20 +259,21 @@ export class TimesheetsService {
       .addSelect('project.name', 'projectName')
       .addSelect('entry.task_id', 'taskId')
       .addSelect("COALESCE(task.title, 'No task')", 'taskTitle')
-      .addSelect("to_char(entry.started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')", 'date')
+      .addSelect("to_char(entry.started_at AT TIME ZONE :timezone, 'YYYY-MM-DD')", 'date')
       .addSelect('SUM(EXTRACT(EPOCH FROM (entry.ended_at - entry.started_at)))', 'seconds')
       .addSelect('COUNT(*)', 'entryCount')
       .where('entry.workspace_id = :workspaceId', { workspaceId })
       .andWhere('entry.user_id = :userId', { userId })
       .andWhere('entry.deleted_at IS NULL')
       .andWhere('entry.ended_at IS NOT NULL')
-      .andWhere('entry.started_at >= :start', { start: `${week.periodStart}T00:00:00.000Z` })
-      .andWhere('entry.started_at < :end', { end: `${week.periodEnd}T00:00:00.000Z` })
+      .andWhere('entry.started_at >= :start', { start: week.startAt })
+      .andWhere('entry.started_at < :end', { end: week.endAt })
+      .setParameter('timezone', timezone)
       .groupBy('entry.project_id')
       .addGroupBy('project.name')
       .addGroupBy('entry.task_id')
       .addGroupBy('task.title')
-      .addGroupBy("to_char(entry.started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')")
+      .addGroupBy("to_char(entry.started_at AT TIME ZONE :timezone, 'YYYY-MM-DD')")
       .getRawMany<{
         projectId: string;
         projectName: string | null;

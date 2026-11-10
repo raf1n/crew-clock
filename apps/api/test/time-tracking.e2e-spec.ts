@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 
 import type { INestApplication } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import type { Server } from 'node:http';
 import request from 'supertest';
 
@@ -563,5 +564,173 @@ describe('time tracking (e2e)', () => {
       .set('Authorization', auth(memberToken))
       .expect(200);
     expect(remaining.body.total).toBe(3);
+  });
+
+  it('registers revocable devices and syncs idempotent agent entries', async () => {
+    await request(server)
+      .post(`/v1/workspaces/${workspaceId}/devices`)
+      .set('Authorization', auth(ownerToken))
+      .send({ name: 'Owner laptop', platform: 'macos' })
+      .expect(403);
+
+    const registration = await request(server)
+      .post(`/v1/workspaces/${workspaceId}/devices`)
+      .set('Authorization', auth(memberToken))
+      .send({ name: 'MacBook Pro', platform: 'macos' })
+      .expect(201);
+
+    expect(registration.body.token).toMatch(/^cc_dev_/);
+    expect(registration.body.device.tokenHash).toBeUndefined();
+    const deviceId = registration.body.device.id;
+    const deviceToken = registration.body.token;
+
+    const memberDevices = await request(server)
+      .get(`/v1/workspaces/${workspaceId}/devices`)
+      .set('Authorization', auth(memberToken))
+      .expect(200);
+    expect(memberDevices.body).toHaveLength(1);
+    expect(memberDevices.body[0]).toMatchObject({
+      id: deviceId,
+      userId: memberId,
+      name: 'MacBook Pro',
+      platform: 'macos',
+      revokedAt: null,
+    });
+
+    const ownerDevices = await request(server)
+      .get(`/v1/workspaces/${workspaceId}/devices`)
+      .set('Authorization', auth(ownerToken))
+      .expect(200);
+    expect(ownerDevices.body).toHaveLength(1);
+
+    const heartbeat = await request(server)
+      .post('/v1/agent/heartbeat')
+      .set('Authorization', auth(deviceToken))
+      .expect(200);
+    expect(heartbeat.body).toMatchObject({
+      deviceId,
+      userId: memberId,
+      workspaceId,
+      name: 'MacBook Pro',
+      platform: 'macos',
+    });
+    expect(heartbeat.body.lastSeenAt).toEqual(expect.any(String));
+
+    const agentProjects = await request(server)
+      .get('/v1/agent/projects')
+      .set('Authorization', auth(deviceToken))
+      .expect(200);
+    expect(agentProjects.body.map((project: { id: string }) => project.id)).toContain(projectId);
+
+    const agentTasks = await request(server)
+      .get(`/v1/agent/tasks?projectId=${projectId}`)
+      .set('Authorization', auth(deviceToken))
+      .expect(200);
+    expect(agentTasks.body.map((task: { id: string }) => task.id)).toContain(taskId);
+
+    await request(server)
+      .post('/v1/agent/heartbeat')
+      .set('Authorization', auth('cc_dev_invalid'))
+      .expect(401);
+
+    const clientId = randomUUID();
+    const agentEntry = {
+      projectId,
+      taskId,
+      description: 'Offline sync',
+      startedAt: '2026-03-02T09:00:00.000Z',
+      endedAt: '2026-03-02T10:00:00.000Z',
+      clientId,
+      idleSeconds: 90,
+    };
+
+    const firstSync = await request(server)
+      .post('/v1/agent/time-entries')
+      .set('Authorization', auth(deviceToken))
+      .send(agentEntry)
+      .expect(201);
+    expect(firstSync.body.clientId).toBe(clientId);
+    expect(firstSync.body.idleSeconds).toBe(90);
+
+    const replay = await request(server)
+      .post('/v1/agent/time-entries')
+      .set('Authorization', auth(deviceToken))
+      .send(agentEntry)
+      .expect(201);
+    expect(replay.body.id).toBe(firstSync.body.id);
+
+    const synced = await request(server)
+      .get(
+        `/v1/workspaces/${workspaceId}/time-entries?from=2026-03-02T00:00:00.000Z&to=2026-03-03T00:00:00.000Z`,
+      )
+      .set('Authorization', auth(memberToken))
+      .expect(200);
+    expect(synced.body.total).toBe(1);
+
+    await request(server)
+      .delete(`/v1/workspaces/${workspaceId}/devices/${deviceId}`)
+      .set('Authorization', auth(memberToken))
+      .expect(204);
+
+    await request(server)
+      .post('/v1/agent/heartbeat')
+      .set('Authorization', auth(deviceToken))
+      .expect(401);
+
+    await request(server)
+      .post('/v1/agent/time-entries')
+      .set('Authorization', auth(deviceToken))
+      .send(agentEntry)
+      .expect(401);
+
+    await request(server)
+      .delete(`/v1/workspaces/${workspaceId}/devices/${deviceId}`)
+      .set('Authorization', auth(outsiderToken))
+      .expect(404);
+  });
+
+  it('groups entries and weeks in the user timezone', async () => {
+    await request(server)
+      .post('/v1/auth/login')
+      .send({
+        email: 'bob@time.test',
+        password: 'correct horse battery',
+        timezone: 'Asia/Dhaka',
+      })
+      .expect(200);
+
+    const created = await request(server)
+      .post(`/v1/workspaces/${workspaceId}/time-entries`)
+      .set('Authorization', auth(memberToken))
+      .send({
+        projectId,
+        description: 'Late night work',
+        startedAt: '2026-04-01T18:30:00.000Z',
+        endedAt: '2026-04-01T19:30:00.000Z',
+      })
+      .expect(201);
+    expect(created.body.timezone).toBe('Asia/Dhaka');
+
+    const daily = await request(server)
+      .get(
+        `/v1/workspaces/${workspaceId}/reports/time/daily?from=2026-04-01T00:00:00.000Z&to=2026-04-03T00:00:00.000Z`,
+      )
+      .set('Authorization', auth(memberToken))
+      .expect(200);
+
+    expect(daily.body.dates).toContain('2026-04-02');
+    const aprilSecond = daily.body.members[0].days.find(
+      (day: { date: string }) => day.date === '2026-04-02',
+    );
+    expect(aprilSecond.seconds).toBe(3600);
+
+    const timesheet = await request(server)
+      .get(`/v1/workspaces/${workspaceId}/timesheets/me?weekStart=2026-04-02`)
+      .set('Authorization', auth(memberToken))
+      .expect(200);
+    expect(timesheet.body.periodStart).toBe('2026-03-30');
+    expect(timesheet.body.totalSeconds).toBe(3600);
+    const localDay = timesheet.body.days.find((day: { date: string }) => day.date === '2026-04-02');
+    expect(localDay.seconds).toBe(3600);
   });
 });

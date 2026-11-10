@@ -1,9 +1,13 @@
 import type { TimeEntrySource } from '@crewclock/shared';
-import { Column, Entity } from 'typeorm';
+import { Column, Entity, Index } from 'typeorm';
 
 import { BaseEntity } from '../../../database/base.entity';
 
 @Entity({ name: 'time_entries' })
+@Index('uq_time_entries_client', ['workspaceId', 'userId', 'clientId'], {
+  unique: true,
+  where: '"client_id" IS NOT NULL AND "deleted_at" IS NULL',
+})
 export class TimeEntryEntity extends BaseEntity {
   @Column({ type: 'uuid' })
   workspaceId!: string;
@@ -28,4 +32,13 @@ export class TimeEntryEntity extends BaseEntity {
 
   @Column({ type: 'varchar', length: 16, default: 'manual' })
   source!: TimeEntrySource;
+
+  @Column({ type: 'uuid', nullable: true })
+  clientId!: string | null;
+
+  @Column({ type: 'integer', default: 0 })
+  idleSeconds!: number;
+
+  @Column({ type: 'varchar', length: 64, default: 'UTC' })
+  timezone!: string;
 }

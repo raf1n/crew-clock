@@ -93,7 +93,7 @@ export class AuthController {
       throw new UnauthorizedException('Missing refresh token');
     }
 
-    const result = await this.auth.refresh(token);
+    const result = await this.auth.refresh(token, input.timezone);
     this.setRefreshCookie(response, result.refreshToken);
     return result;
   }

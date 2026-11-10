@@ -12,4 +12,7 @@ export class UserEntity extends BaseEntity {
 
   @Column({ type: 'varchar', length: 255 })
   passwordHash!: string;
+
+  @Column({ type: 'varchar', length: 64, default: 'UTC' })
+  timezone!: string;
 }

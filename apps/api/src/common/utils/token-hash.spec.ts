@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { hashToken, tokenHashMatches } from './token-hash.util';
+import { hashToken, tokenHashMatches } from './token-hash';
 
 describe('token hashing', () => {
   it('produces the sha256 hex digest of the token', () => {

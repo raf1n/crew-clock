@@ -7,6 +7,7 @@ export function toPublicUser(user: UserEntity): PublicUser {
     id: user.id,
     email: user.email,
     name: user.name,
+    timezone: user.timezone,
     createdAt: user.createdAt.toISOString(),
   };
 }

@@ -36,6 +36,7 @@ export function TimeEntriesTable({
           <TableHead>Started</TableHead>
           <TableHead>Ended</TableHead>
           <TableHead>Duration</TableHead>
+          <TableHead>Idle</TableHead>
           <TableHead>Project</TableHead>
           <TableHead>Description</TableHead>
           {showActions ? <TableHead className="text-right">Actions</TableHead> : null}
@@ -61,6 +62,9 @@ export function TimeEntriesTable({
             </TableCell>
             <TableCell className="font-medium tabular-nums">
               {entry.durationSeconds === null ? '—' : formatDuration(entry.durationSeconds)}
+            </TableCell>
+            <TableCell className="tabular-nums text-muted-foreground">
+              {entry.idleSeconds > 0 ? formatDuration(entry.idleSeconds) : '—'}
             </TableCell>
             <TableCell>{projectName(entry.projectId)}</TableCell>
             <TableCell className="max-w-64 truncate text-muted-foreground">

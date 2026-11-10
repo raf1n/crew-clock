@@ -5,12 +5,12 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/coverage/**', '**/node_modules/**', '.commandcode/**'],
+    ignores: ['**/dist/**', '**/out/**', '**/coverage/**', '**/node_modules/**', '.commandcode/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['**/*.ts'],
+    files: ['**/*.{ts,tsx}'],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',
@@ -24,6 +24,12 @@ export default tseslint.config(
       ],
       eqeqeq: ['error', 'smart'],
       'no-console': 'off',
+    },
+  },
+  {
+    files: ['apps/agent/src/renderer/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: { ...globals.browser },
     },
   },
   {

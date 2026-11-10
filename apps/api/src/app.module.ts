@@ -9,6 +9,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { validateEnv } from './config/env.validation';
 import { buildDataSourceOptions } from './database/data-source-options';
 import { AuthModule } from './modules/auth/auth.module';
+import { DevicesModule } from './modules/devices/devices.module';
 import { HealthModule } from './modules/health/health.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { ReportsModule } from './modules/reports/reports.module';
@@ -40,6 +41,7 @@ import { WorkspacesModule } from './modules/workspaces/workspaces.module';
     ProjectsModule,
     TasksModule,
     TimeEntriesModule,
+    DevicesModule,
     TimesheetsModule,
     ReportsModule,
     AuthModule,
