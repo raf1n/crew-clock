@@ -1,0 +1,38 @@
+{
+  "name": "crewclock",
+  "private": true,
+  "packageManager": "pnpm@10.18.3",
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24.11.0"
+  },
+  "scripts": {
+    "build:shared": "pnpm --filter @crewclock/shared build",
+    "build": "pnpm build:shared && pnpm --filter @crewclock/api build && pnpm --filter @crewclock/web build",
+    "dev": "pnpm build:shared && pnpm --parallel --filter @crewclock/api --filter @crewclock/web dev",
+    "dev:api": "pnpm build:shared && pnpm --filter @crewclock/api dev",
+    "dev:web": "pnpm build:shared && pnpm --filter @crewclock/web dev",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm build:shared && pnpm --filter @crewclock/shared typecheck && pnpm --filter @crewclock/api typecheck && pnpm --filter @crewclock/web typecheck",
+    "test": "pnpm build:shared && pnpm -r test",
+    "test:e2e": "pnpm build:shared && pnpm --filter @crewclock/api test:e2e",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "migration:run": "pnpm --filter @crewclock/api migration:run"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.14.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.14.0",
+    "prettier": "^3.9.10",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.72.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "argon2"
+    ]
+  }
+}

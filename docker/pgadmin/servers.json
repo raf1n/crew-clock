@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Crewclock (local)",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "time_tracker",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "Comment": "Local development database"
+    }
+  }
+}
