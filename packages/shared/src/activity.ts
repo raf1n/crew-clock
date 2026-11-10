@@ -88,6 +88,16 @@ export interface ActivityAppGroup {
   sampleCount: number;
 }
 
+export interface ActivityMemberGroup {
+  userId: string;
+  label: string;
+  activeSeconds: number;
+  idleSeconds: number;
+  activityPercent: number;
+  sampleCount: number;
+  apps: ActivityAppGroup[];
+}
+
 export interface ActivityReport {
   from: string;
   to: string;
@@ -96,6 +106,7 @@ export interface ActivityReport {
   activityPercent: number;
   sampleCount: number;
   groups: ActivityAppGroup[];
+  members: ActivityMemberGroup[];
 }
 
 export interface ActivitySample {

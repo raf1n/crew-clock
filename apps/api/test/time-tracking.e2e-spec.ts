@@ -682,6 +682,28 @@ describe('time tracking (e2e)', () => {
       keyboardEvents: 42,
       mouseEvents: 12,
     });
+    expect(activityReport.body.members).toHaveLength(1);
+    expect(activityReport.body.members[0]).toMatchObject({
+      userId: memberId,
+      label: 'Bob',
+      activeSeconds: 240,
+      idleSeconds: 60,
+      sampleCount: 1,
+    });
+    expect(activityReport.body.members[0].apps[0]).toMatchObject({
+      appName: 'Visual Studio Code',
+      activeSeconds: 240,
+      idleSeconds: 60,
+      sampleCount: 1,
+    });
+
+    const ownerActivityReport = await request(server)
+      .get(
+        `/v1/workspaces/${workspaceId}/activity?from=2026-03-02T00:00:00.000Z&to=2026-03-03T00:00:00.000Z`,
+      )
+      .set('Authorization', auth(ownerToken))
+      .expect(200);
+    expect(ownerActivityReport.body.members[0].userId).toBe(memberId);
 
     await request(server)
       .get(
